@@ -81,6 +81,14 @@ export default function Tracker() {
     setIncomeSource(event.target.value);
   };
 
+  const handleStartDateChange = (event) => {
+    setStartDate(event.target.value);
+  };
+
+  const handleEndDateChange = (event) => {
+    setEndDate(event.target.value);
+  };
+
   const submitExpenseHandler = () => {
     if (name.trim() === "" || amount.trim() === "") {
       alert("Please enter both name and amount.");
@@ -89,18 +97,18 @@ export default function Tracker() {
 
     const expenseAmount = parseFloat(amount);
 
-    // Check if the expense amount exceeds the remaining balance
     if (totalIncome - totalAmountSpent < expenseAmount) {
       alert("Cannot add expense as it exceeds the remaining balance.");
       return;
     }
 
-    const currentDate = new Date().toISOString().split("T")[0]; // YYYY-MM-DD format
+    const currentDate = new Date().toISOString().split("T")[0];
 
     const inputObject = {
       nameInput: name,
       amountInput: amount,
       date: currentDate,
+      timestamp: new Date().getTime(),
     };
 
     setDatas([...datas, inputObject]);
@@ -114,12 +122,13 @@ export default function Tracker() {
       return;
     }
 
-    const currentDate = new Date().toISOString().split("T")[0]; // YYYY-MM-DD format
+    const currentDate = new Date().toISOString().split("T")[0];
 
     const incomeObject = {
       amountInput: income,
       source: incomeSource,
       date: currentDate,
+      timestamp: new Date().getTime(),
     };
 
     setIncomeDatas([...incomeDatas, incomeObject]);
@@ -150,6 +159,7 @@ export default function Tracker() {
   const generatePDF = () => {
     const doc = new jsPDF();
 
+    // Filter entries by date range
     const filteredDatas = datas.filter((data) => {
       const date = new Date(data.date);
       return date >= new Date(startDate) && date <= new Date(endDate);
@@ -160,6 +170,7 @@ export default function Tracker() {
       return date >= new Date(startDate) && date <= new Date(endDate);
     });
 
+    // Combine both income and expense entries into a single list
     const combinedEntries = [
       ...filteredIncomeDatas.map((entry) => ({
         ...entry,
@@ -171,6 +182,10 @@ export default function Tracker() {
       })),
     ];
 
+    // Sort entries by timestamp to maintain input order
+    combinedEntries.sort((a, b) => a.timestamp - b.timestamp);
+
+    // Prepare data for PDF
     const reportData = [];
     let remainingBalance = 0;
 
@@ -179,21 +194,21 @@ export default function Tracker() {
         const incomeAmount = parseFloat(entry.amountInput || entry.amount);
         remainingBalance += incomeAmount;
         reportData.push([
-          entry.date,
-          entry.source,
-          `₹${incomeAmount.toFixed(2)}`,
+          formatDate(entry.date),
+          entry.source || "", // Income source
+          incomeAmount.toFixed(2),
           "",
-          `₹${remainingBalance.toFixed(2)}`,
+          remainingBalance.toFixed(2),
         ]);
       } else if (entry.type === "expense") {
         const expenseAmount = parseFloat(entry.amountInput);
         remainingBalance -= expenseAmount;
         reportData.push([
-          entry.date,
-          entry.nameInput,
+          formatDate(entry.date),
+          entry.nameInput || "", // Expense name
           "",
-          `₹${expenseAmount.toFixed(2)}`,
-          `₹${remainingBalance.toFixed(2)}`,
+          expenseAmount.toFixed(2),
+          remainingBalance.toFixed(2),
         ]);
       }
     });
@@ -206,10 +221,18 @@ export default function Tracker() {
           ["Date", "Source/Name", "Income", "Expenses", "Remaining Balance"],
         ],
         body: reportData,
+        styles: {
+          halign: "right",
+        },
       });
     }
 
     doc.save(`Expense_Report_${startDate}_to_${endDate}.pdf`);
+  };
+
+  const formatDate = (dateString) => {
+    const [year, month, day] = dateString.split("-");
+    return `${day}/${month}/${year}`;
   };
 
   return (
@@ -239,16 +262,17 @@ export default function Tracker() {
       >
         Add Expense
       </button>
-      <div className="mt-4">
-        <button
-          onClick={toggleIncomeInput}
-          className="w-full p-2 bg-green-500 text-white font-bold rounded hover:bg-green-700"
-        >
-          {showIncomeInput ? "Cancel Income Adding" : "Add Income"}
-        </button>
-      </div>
       {showIncomeInput && (
-        <div className="mt-4">
+        <>
+          <div className="mt-4">
+            <label className="block font-bold mb-2">Income Amount:</label>
+            <input
+              type="number"
+              value={income}
+              onChange={handleIncomeChange}
+              className="w-full p-2 border rounded"
+            />
+          </div>
           <div className="mb-4">
             <label className="block font-bold mb-2">Income Source:</label>
             <input
@@ -258,62 +282,72 @@ export default function Tracker() {
               className="w-full p-2 border rounded"
             />
           </div>
-          <div className="mb-4">
-            <label className="block font-bold mb-2">Income Amount:</label>
-            <input
-              type="number"
-              value={income}
-              onChange={handleIncomeChange}
-              className="w-full p-2 border rounded"
-            />
-          </div>
           <button
             onClick={submitIncomeHandler}
             className="w-full p-2 bg-green-500 text-white font-bold rounded hover:bg-green-700"
           >
-            Submit Income
+            Add Income
           </button>
-        </div>
+          <button
+            onClick={toggleIncomeInput}
+            className="w-full mt-2 p-2 bg-red-500 text-white font-bold rounded hover:bg-red-700"
+          >
+            Cancel Income Adding
+          </button>
+        </>
       )}
-      <div className="mt-4">
-        <h2 className="text-lg font-bold">
-          Total Income: ₹{totalIncome.toFixed(2)}
-        </h2>
-        <h2 className="text-lg font-bold">
-          Total Expense: ₹{totalAmountSpent.toFixed(2)}
-        </h2>
-        <h2 className="text-lg font-bold">
-          Remaining Balance: ₹{(totalIncome - totalAmountSpent).toFixed(2)}
-        </h2>
-      </div>
-      <div className="mb-4">
-        <label className="block font-bold mb-2">Start Date:</label>
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          className="w-full p-2 border rounded mb-4"
-        />
-        <label className="block font-bold mb-2">End Date:</label>
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          className="w-full p-2 border rounded mb-4"
-        />
+      {!showIncomeInput && (
         <button
-          onClick={generatePDF}
-          className="w-full p-2 bg-red-500 text-white font-bold rounded hover:bg-red-700"
+          onClick={toggleIncomeInput}
+          className="w-full p-2 bg-green-500 text-white font-bold rounded hover:bg-green-700"
         >
-          Generate PDF Report
+          Add Income
         </button>
-      </div>
+      )}
       <button
         onClick={clearHandler}
-        className="w-full p-2 bg-gray-500 text-white font-bold rounded hover:bg-gray-700"
+        className="w-full p-2 bg-red-500 text-white font-bold rounded hover:bg-red-700"
       >
         Clear All
       </button>
+      <div className="mt-4 flex flex-col gap-4">
+        <button
+          onClick={generatePDF}
+          className="w-full p-2 bg-yellow-500 text-white font-bold rounded hover:bg-yellow-700"
+        >
+          Generate PDF
+        </button>
+        <div className="flex gap-4">
+          <div className="w-1/2">
+            <label className="block mb-2">Start Date:</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={handleStartDateChange}
+              className="w-full p-2 border rounded"
+            />
+          </div>
+          <div className="w-1/2">
+            <label className="block mb-2">End Date:</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={handleEndDateChange}
+              className="w-full p-2 border rounded"
+            />
+          </div>
+        </div>
+      </div>
+      <div className="mt-6 border-t pt-4 text-center">
+        <h2 className="text-xl font-bold">Summary</h2>
+        <div className="mt-2 text-lg">
+          <p>Total Expenses: ₹{totalAmountSpent.toFixed(2)}</p>
+          <p>Total Income: ₹{totalIncome.toFixed(2)}</p>
+          <p>
+            Remaining Balance: ₹{(totalIncome - totalAmountSpent).toFixed(2)}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
